@@ -87,31 +87,84 @@ int read_commands(char **params) {
 
 // make some  builtin commands
 int custom_cd(char **params) {
-  if (params[1] == NULL) {
-    sherror("requires one or more arguement to cd\n");
-    return 1;
-  } else {
-    if (chdir(params[1]) != 0) {
-      perror("shell");
-    }
+
+  // skip the "cd" command itself (params[0])
+  char *dir = params[1] ? params[1] : getenv("HOME");
+
+  if (!dir) {
+    fprintf(stderr, "No home directory found\n");
+    return 0;
   }
+
+  if (chdir(dir) != 0) {
+    perror("cd");
+    return 0;
+  }
+
   return 1;
 }
 
 // ls command
-int custom_ls() {
+int custom_ls(int argc, char **argv) {
+  pid_t pid = fork();
 
-  DIR *d;
-  struct dirnet *dir;
-  d = opendir(".");
-  if (d) {
-    while ((dir = readdir(d)) != NULL) {
-      printf("%s\n", *dir.d_name);
+  if (pid == -1) {
+    sherror("forking failed in custom_ls");
+    return 0;
+  } else if (pid == 0) {
+
+    char **ls_args =
+        malloc(sizeof(char *) * (argc + 2)); // +1 for ls & +1 for NULL
+    if (!ls_args) {
+      sherror("allocation failed for ls_args");
+      exit(1);
     }
-    closedir(d);
+
+    // First argument is "ls"
+    ls_args[0] = strdup("ls");
+    if (!ls_args[0]) {
+      sherror("allocation failed for ls command");
+      free(ls_args);
+      exit(1);
+    }
+
+    // copy all arguments after the "ls" command
+    for (int i = 1; i < argc; i++) {
+      ls_args[i] = strdup(argv[i]);
+      if (!ls_args[i]) {
+        sherror("allocation failed for ls argument");
+
+        // free all prev allocations
+        for (int j = 0; j < i; j++) {
+          free(ls_args[j]);
+        }
+        free(ls_args);
+        exit(1);
+      }
+    }
+
+    // NULL to terminate the argument list
+    ls_args[argc] = NULL;
+
+    // Execute ls
+    execvp("ls", ls_args);
+
+    // if execvp returns, it has failed
+    perror("execvp failed for ls");
+
+    // clean up if execvp fails
+    for (int i = 0; i < argc; i++) {
+      if (ls_args[i])
+        free(ls_args[i]);
+    }
+    free(ls_args);
+    exit(1);
+  } else {
+
+    int status;
+    waitpid(pid, &status, 0);
+    return 1;
   }
-  return 1;
-  return 1;
 }
 
 int main() {
@@ -130,9 +183,15 @@ int main() {
     // handle empty command
     if (status == 1 || params[0] == NULL) {
       continue;
-    }
-
-    if (strcmp(params[0], "exit") == 0) {
+    } else if (strcmp(params[0], "cd") == 0) {
+      custom_cd(params);
+      continue;
+    } else if (strcmp(params[0], "ls") == 0) {
+      custom_ls(1, params);
+      continue;
+    } else if (strcmp(params[0], "exit") == 0) {
+      break;
+    } else if (strcmp(params[0], " ") == 0) {
       break;
     }
 
@@ -152,12 +211,10 @@ int main() {
 
     } else {
 
-      // parent process
       wait(NULL); // wait for child to finish
     }
   }
 
-  // clean up any remaining allocated memory
   for (int i = 0; i < PARAM_LEN; i++) {
     if (params[i] != NULL) {
       free(params[i]);
