@@ -15,6 +15,13 @@
 #define PARAM_LEN 50
 #define BUFFER_SIZE 1240
 
+// function prototypes
+void print_prompt();
+int read_commands(char **params);
+int custom_cd(char **params);
+int custom_ls(int argc, char **agrv);
+int custom_touch(char **params);
+
 // print the prompt icon to the user
 void print_prompt() {
   printf("catalyst > ");
