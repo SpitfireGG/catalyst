@@ -1,4 +1,5 @@
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,11 +13,12 @@
 
 #define MAX_COMMAND_LENGTH 500
 #define PARAM_LEN 50
+#define BUFFER_SIZE 1240
 
 // print the prompt icon to the user
 void print_prompt() {
   printf("catalyst > ");
-  fflush(stdout); // Ensure the prompt is displayed
+  fflush(stdout); // print prompt immediately
 }
 
 // function to read the command from the user
@@ -167,6 +169,33 @@ int custom_ls(int argc, char **argv) {
   }
 }
 
+// custom touch command
+int custom_touch(char **params) {
+
+  if (params[1] == NULL) {
+    fprintf(stderr, "missing file or operand\n");
+    return 0;
+  }
+
+  pid_t touch_child_pid = fork();
+
+  if (touch_child_pid == -1) {
+    perror("fork (touch)\n");
+    return 0;
+
+  } else if (touch_child_pid == 0) {
+
+    // this is the child process, and we gotta do something here to mimic the
+    // touch command
+    int fd = open(params[1], O_CREAT | O_WRONLY);
+    if (fd == -1) {
+      fprintf(stderr, "missing file or operand\n");
+      return 0;
+    }
+  }
+  return 0;
+}
+
 int main() {
   char *params[PARAM_LEN] = {NULL};
   int status;
@@ -189,9 +218,10 @@ int main() {
     } else if (strcmp(params[0], "ls") == 0) {
       custom_ls(1, params);
       continue;
+    } else if (strcmp(params[0], "touch") == 0) {
+      custom_touch(params);
+      continue;
     } else if (strcmp(params[0], "exit") == 0) {
-      break;
-    } else if (strcmp(params[0], " ") == 0) {
       break;
     }
 
